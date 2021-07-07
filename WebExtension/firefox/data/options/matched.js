@@ -14,6 +14,7 @@
 
   const INC = Number(root.dataset.inc || 100);
   const count = Number(localStorage.getItem('explore-count') || INC - 5);
+  const cols = Number(root.dataset.cols || 3);
 
   const style = document.createElement('style');
   style.textContent = `
@@ -26,7 +27,7 @@
   #explore[data-loaded=true] {
     margin: 4px;
     padding: 5px;
-    box-shadow: 0 0 1px #ccc;
+    box-shadow: 0 0 4px #ccc;
     border: solid 1px #ccc;
   }
   #explore .close {
@@ -121,7 +122,7 @@
     const colors = shuffle(
       ['524c84', '606470', '755da3', 'c06c84', '393e46', '446e5c', '693e52', '1d566e', '693e52', 'd95858', 'f27370']
     );
-    shuffle(Object.entries(json)).slice(0, 3).forEach(([id, {name}], i) => {
+    shuffle(Object.entries(json)).slice(0, cols).forEach(([id, {name}], i) => {
       const td = document.createElement('td');
       const a = Object.assign(document.createElement('a'), {
         target: '_blank',
@@ -165,5 +166,7 @@
       localStorage.setItem('explore-count', count + 1);
     }
   };
-  init();
+  if (/Edg/.test(navigator.userAgent) === false) {
+    init();
+  }
 }

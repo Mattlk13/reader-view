@@ -1,4 +1,24 @@
-/* global config, TTS */
+/**
+    Reader View - Strips away clutter
+
+    Copyright (C) 2014-2021 [@rNeomy](https://add0n.com/chrome-reader-view.html)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the Mozilla Public License as published by
+    the Mozilla Foundation, either version 2 of the License, or
+    (at your option) any later version.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    Mozilla Public License for more details.
+    You should have received a copy of the Mozilla Public License
+    along with this program.  If not, see {https://www.mozilla.org/en-US/MPL/}.
+
+    GitHub: https://github.com/rNeomy/reader-view/
+    Homepage: https://add0n.com/chrome-reader-view.html
+*/
+
+/* global config, TTS, tips */
 'use strict';
 
 let article;
@@ -8,6 +28,23 @@ let highlight;
 
 const args = new URLSearchParams(location.search);
 
+// hash
+const hash = link => {
+  const hash = link.hash.substr(1);
+  const a = iframe.contentDocument.querySelector(`[name="${hash}"],#${hash}`);
+  if (a) {
+    a.scrollIntoView({
+      block: 'start',
+      inline: 'nearest'
+    });
+    a.focus();
+  }
+  else {
+    console.warn('hash', link.hash, 'is unreachable');
+  }
+};
+window.hash = hash;
+
 const nav = {
   back() {
     chrome.runtime.sendMessage({
@@ -15,13 +52,19 @@ const nav = {
     });
   }
 };
+window.nav = nav;
+
+const template = async () => {
+  const r = await await fetch('template.html');
+  return await r.text();
+};
 
 const update = {
   async: () => {
     const prefs = config.prefs;
     let lh = 'unset';
     if (prefs['line-height']) {
-      lh = prefs['font-size'] * (prefs['line-height'] === 32 ? 1.5 : 1.2) + 'px';
+      lh = (prefs['font-size'] * (prefs['line-height'] === 32 ? 1.5 : 1.2)).toFixed(1) + 'px';
     }
     styles.internals.textContent = `body {
       font-size:  ${prefs['font-size']}px;
@@ -38,9 +81,10 @@ const update = {
     document.querySelector('[data-id=full-width] input').checked = Boolean(prefs.width) === false;
     // as a CSS selector
     document.body.dataset.font = prefs.font;
-    if (iframe.contentDocument) {
-      iframe.contentDocument.body.dataset.font = prefs.font;
-    }
+    //
+    document.querySelector('#font-details [data-id="font-size"]').textContent = prefs['font-size'] + 'px';
+    document.querySelector('#font-details [data-id="screen-width"]').textContent = prefs['width'] || 'unset';
+    document.querySelector('#font-details [data-id="line-height"]').textContent = lh;
   },
   images: () => {
     const bol = config.prefs['show-images'];
@@ -53,7 +97,6 @@ const update = {
       span.classList.add('icon-picture-false');
       span.classList.remove('icon-picture-true');
     }
-    iframe.contentDocument.body.dataset.images = bol;
   }
 };
 
@@ -61,8 +104,10 @@ const iframe = document.querySelector('iframe');
 
 const fontUtils = document.querySelector('#font-utils');
 fontUtils.addEventListener('blur', () => {
-  fontUtils.classList.add('hidden');
-  iframe.contentWindow.focus();
+  setTimeout(() => {
+    fontUtils.classList.add('hidden');
+    iframe.contentWindow.focus();
+  }, 100);
 });
 const imageUtils = document.querySelector('#image-utils');
 imageUtils.addEventListener('blur', () => {
@@ -71,29 +116,88 @@ imageUtils.addEventListener('blur', () => {
 });
 
 const shortcuts = [];
+shortcuts.render = () => {
+  for (const {span, id} of shortcuts) {
+    if (span && config.prefs.shortcuts[id]) {
+      span.title = span.title.replace(
+        '(command)',
+        '(' + config.prefs.shortcuts[id].map(s => s.replace('Key', '')).join(' + ') + ')'
+      );
+    }
+  }
+};
+
+/* Toolbar Visibility*/
+{
+  shortcuts.push({
+    id: 'toggle-toolbar',
+    span: document.getElementById('toolbar'),
+    action: () => chrome.storage.local.set({
+      'toggle-toolbar': config.prefs['toggle-toolbar'] === false
+    })
+  });
+}
 
 /* printing */
 {
   const span = document.createElement('span');
-  span.title = 'Print in the Reader View (Meta + P)';
+  span.title = 'Print in the Reader View (command)';
   span.classList.add('icon-print', 'hidden');
   span.id = 'printing-button';
 
   span.onclick = () => iframe.contentWindow.print();
   shortcuts.push({
-    condition: e => e.code === 'KeyP' && (e.metaKey || e.ctrlKey),
-    action: span.onclick
+    id: 'print',
+    action: span.onclick,
+    span
+  });
+  document.getElementById('toolbar').appendChild(span);
+}
+/* email */
+{
+  const span = document.createElement('span');
+  span.title = 'Email Content (command)';
+  span.classList.add('icon-mail', 'hidden');
+  span.id = 'mail-button';
+
+  span.onclick = () => {
+    const a = document.createElement('a');
+    a.target = '_blank';
+    a.href = 'mailto:' + config.prefs['mail-to'] + '?subject=' + encodeURIComponent(article.title.trim()) + '&body=';
+    let body = article.textContent.trim().replace(/\n{4,}/g, '\n\n\n');
+    const ending = config.prefs['mail-ending'].replace(/\[(\w+)\]/g, (a, b) => {
+      return article[b.toLowerCase()] || a;
+    });
+    const max = config.prefs['mail-max'] - a.href.length - ending.length;
+
+    if (body.length > max) {
+      body = body.substr(0, max - 3) + '...';
+    }
+    body += ending;
+    a.href += encodeURIComponent(body);
+    a.click();
+  };
+  shortcuts.push({
+    id: 'email',
+    action: span.onclick,
+    span
   });
   document.getElementById('toolbar').appendChild(span);
 }
 /* save as HTML*/
 {
   const span = document.createElement('span');
-  span.title = 'Save in HTML format (Meta + S)';
+  span.title = 'Save in HTML format (command)';
   span.classList.add('icon-save', 'hidden');
   span.id = 'save-button';
   span.onclick = () => {
-    const content = iframe.contentDocument.documentElement.outerHTML;
+    const content = iframe.contentDocument.documentElement.outerHTML
+      // remove all script tags
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      // remove transition
+      .replace(/transition:.*/, '')
+      // add title
+      .replace('<head>', '<head><title>' + document.title + '</title>');
     const blob = new Blob([content], {
       type: 'text/html'
     });
@@ -107,7 +211,8 @@ const shortcuts = [];
     setTimeout(() => URL.revokeObjectURL(objectURL));
   };
   shortcuts.push({
-    condition: e => e.code === 'KeyS' && (e.metaKey || e.ctrlKey) && !e.shiftKey,
+    id: 'save',
+    span,
     action: span.onclick
   });
   document.getElementById('toolbar').appendChild(span);
@@ -115,7 +220,7 @@ const shortcuts = [];
 /* fullscreen */
 {
   const span = document.createElement('span');
-  span.title = 'Switch to the fullscreen reading (F9)';
+  span.title = 'Switch to the fullscreen reading (command)';
   span.classList.add('icon-fullscreen', 'hidden');
   span.id = 'fullscreen-button';
   span.onclick = () => {
@@ -133,7 +238,8 @@ const shortcuts = [];
     }
   };
   shortcuts.push({
-    condition: e => e.code === 'F9',
+    id: 'fullscreen',
+    span,
     action: span.onclick
   });
   document.getElementById('toolbar').appendChild(span);
@@ -143,12 +249,17 @@ const shortcuts = [];
   const span = document.createElement('span');
   span.classList.add('hidden', 'icon-design');
   span.id = 'design-mode-button';
-  span.title = `Toggle design mode (Meta + Shift + D)
+  span.title = `Toggle design mode (command)
 
-When active, you can edit the document or delete elements like MS word`;
+When active, you can edit the document or delete elements like MS word
+
+Ctrl/Command + B: Toggles bold on/off for the selection or at the insertion point.
+Ctrl/Command + I: Toggles italics on/off for the selection or at the insertion point.
+Ctrl/Command + U: Toggles underline on/off for the selection or at the insertion point.`;
   span.dataset.cmd = 'toggle-design-mode';
   shortcuts.push({
-    condition: e => e.code === 'KeyD' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'design-mode',
+    span,
     action() {
       span.click();
     }
@@ -158,7 +269,7 @@ When active, you can edit the document or delete elements like MS word`;
 /* speech */
 {
   const span = document.createElement('span');
-  span.title = 'Read this Article (Beta)\nTo start from middle, select starting word, then press this button\n(Meta + Shift + S)';
+  span.title = 'Read this Article (command)\nTo start from middle, select starting word, then press this button';
   span.classList.add('icon-speech', 'hidden');
   span.id = 'speech-button';
   span.onclick = async () => {
@@ -175,19 +286,38 @@ When active, you can edit the document or delete elements like MS word`;
       document.body.dataset.speech = true;
       iframe.contentDocument.body.dataset.speech = true;
       await add('libs/text-to-speech/engines/watson.js');
+      await add('libs/text-to-speech/engines/translate.js');
       await add('libs/text-to-speech/tts.js');
       await add('libs/text-to-speech/vendors/sentence-boundary-detection/sbd.js');
       tts = new TTS(iframe.contentDocument, {
         separator: config.prefs['tts-separator'],
         delay: config.prefs['tts-delay'],
-        maxlength: config.prefs['tts-maxlength']
+        maxlength: config.prefs['tts-maxlength'],
+        minlength: config.prefs['tts-minlength'],
+        scroll: config.prefs['tts-scroll']
       });
+      tts.on('status', s => {
+        document.querySelector('#speech [data-id=msg-speech]').textContent = s === 'buffering' ? 'Please Wait...' : '';
+      });
+      tts.on('error', e => chrome.runtime.sendMessage({
+        cmd: 'notify',
+        msg: e.message || e
+      }));
+
+      window.addEventListener('beforeunload', () => chrome.runtime.sendMessage({
+        cmd: 'delete-cache',
+        cache: tts.CACHE
+      }));
       tts.feed(...iframe.contentDocument.querySelectorAll('.page p, .page h1, .page h2, .page h3, .page h4, .page li, .page td, .page th'));
       await tts.attach(document.getElementById('speech'));
       await tts.ready();
-      tts.buttons.play.title = 'Play/Pause (Meta + Shift + X)'; // eslint-disable-line require-atomic-updates
-      tts.buttons.next.title = 'Next (Meta + Shift + C)'; // eslint-disable-line require-atomic-updates
-      tts.buttons.previous.title += 'Previous (Meta + Shift + Z)'; // eslint-disable-line require-atomic-updates
+      tts.buttons.play.title =
+        `Play/Pause (${config.prefs.shortcuts['speech-play'].map(s => s.replace('Key', '')).join(' + ')})`;
+      tts.buttons.next.title =
+        `Next (${config.prefs.shortcuts['speech-next'].map(s => s.replace('Key', '')).join(' + ')})`;
+      tts.buttons.previous.title +=
+        `Previous (${config.prefs.shortcuts['speech-previous'].map(s => s.replace('Key', '')).join(' + ')})`;
+
       // auto play
       tts.buttons.play.click();
       // start from user selection
@@ -208,7 +338,14 @@ When active, you can edit the document or delete elements like MS word`;
             parent = parent.parentElement;
           }
           const bounded = tts.sections.filter(e => {
-            return e === parent || e.target === parent || parent.contains(e.target || e);
+            for (const c of (e.targets ? e.targets : [e.target || e])) {
+              if (
+                c === parent || c.target === parent ||
+                parent.contains(c.target || c) || (c.target || c).contains(parent)
+              ) {
+                return true;
+              }
+            }
           });
           if (bounded.length) {
             const offset = tts.sections.indexOf(bounded[0]);
@@ -225,17 +362,24 @@ When active, you can edit the document or delete elements like MS word`;
       iframe.contentDocument.body.dataset.speech = true;
     }
   };
+  chrome.storage.local.get({
+    'speech-mode': ''
+  }, prefs => {
+    document.getElementById('speech').dataset.mode = prefs['speech-mode'];
+    document.querySelector('[data-cmd="minimize-speech"]').textContent = prefs['speech-mode'] === '' ? '-' : '□';
+  });
   shortcuts.push({
-    condition: e => e.code === 'KeyS' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'speech',
+    span,
     action: span.onclick
   }, {
-    condition: e => e.code === 'KeyZ' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'speech-previous',
     action: () => tts && tts.buttons.previous.click()
   }, {
-    condition: e => e.code === 'KeyC' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'speech-next',
     action: () => tts && tts.buttons.next.click()
   }, {
-    condition: e => e.code === 'KeyX' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'speech-play',
     action: () => tts && tts.buttons.play.click()
   });
   document.getElementById('toolbar').appendChild(span);
@@ -246,10 +390,11 @@ When active, you can edit the document or delete elements like MS word`;
   const span = document.createElement('span');
   span.classList.add('hidden');
   span.id = 'images-button';
-  span.title = 'Toggle images (Meta + Shift + I)';
+  span.title = 'Toggle images (command)';
   span.dataset.cmd = 'open-image-utils';
   shortcuts.push({
-    condition: e => e.code === 'KeyI' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'images',
+    span,
     action() {
       chrome.storage.local.set({
         'show-images': config.prefs['show-images'] === false
@@ -264,34 +409,78 @@ When active, you can edit the document or delete elements like MS word`;
   const span = document.createElement('span');
   span.classList.add('hidden', 'icon-highlight');
   span.id = 'highlight-button';
-  span.title = `Toggle highlight (Meta + Shift + H)`;
+  span.title = `Toggle highlight (command)`;
   span.dataset.cmd = 'toggle-highlight';
   span.dataset.disabled = true;
   shortcuts.push({
-    condition: e => e.code === 'KeyH' && (e.metaKey || e.ctrlKey) && e.shiftKey,
+    id: 'highlight',
+    span,
     action() {
       span.click();
     }
   });
   document.getElementById('toolbar').appendChild(span);
 
-  // post highlights to bg
+  // post highlights to bg if this feature is used
   const post = () => chrome.runtime.sendMessage({
     cmd: 'highlights',
     value: highlight.export(),
-    href: args.get('url')
+    href: args.get('url').split('#')[0]
   });
-  window.addEventListener('beforeunload', post);
-  chrome.runtime.onMessage.addListener(request => {
-    if (request.cmd === 'export-highlights') {
+  window.addEventListener('beforeunload', () => {
+    if (highlight && highlight.used) {
       post();
+    }
+  });
+  chrome.runtime.onMessage.addListener(request => {
+    if (request.cmd === 'export-highlights' && highlight.used) {
+      post();
+    }
+    else if (request.cmd === 'append-highlights' && request.href === args.get('url').split('#')[0]) {
+      highlight.import(request.highlights);
+    }
+  });
+}
+
+/* user actions */
+{
+  config.load(() => {
+    try {
+      config.prefs['user-action'].forEach((action, index) => {
+        const span = document.createElement('span');
+        span.classList.add('custom');
+        span.title = action.title || 'User Action';
+        const img = document.createElement('img');
+        img.src = action.icon || 'command.svg';
+        span.appendChild(img);
+        document.getElementById('toolbar').appendChild(span);
+        span.onclick = () => {
+          const s = document.createElement('script');
+          const b = new Blob([action.code]);
+          s.src = URL.createObjectURL(b);
+          iframe.contentDocument.body.appendChild(s);
+          URL.revokeObjectURL(s.src);
+          s.remove();
+        };
+        if (action.shortcut) {
+          const id = 'ua-' + index;
+          shortcuts.push({
+            id,
+            span,
+            action: span.onclick
+          });
+          config.prefs.shortcuts[id] = action.shortcut.split(/\s+\+\s+/);
+        }
+      });
+    }
+    catch (e) {
+      console.warn('User Action Installation Failed', e);
     }
   });
 }
 
 const styles = {
   top: document.createElement('style'),
-  iframe: document.createElement('style'),
   internals: document.createElement('style')
 };
 
@@ -367,6 +556,21 @@ document.addEventListener('click', e => {
     iframe.contentDocument.body.dataset.speech = false;
     tts.buttons.stop.click();
   }
+  else if (cmd === 'minimize-speech') {
+    const e = document.getElementById('speech');
+    const mode = e.dataset.mode;
+    if (mode === 'collapsed') {
+      e.dataset.mode = '';
+      target.textContent = '-';
+    }
+    else {
+      e.dataset.mode = 'collapsed';
+      target.textContent = '□';
+    }
+    chrome.storage.local.set({
+      'speech-mode': e.dataset.mode
+    });
+  }
   else if (cmd === 'open-font-utils') {
     fontUtils.classList.remove('hidden');
     fontUtils.focus();
@@ -392,13 +596,30 @@ document.addEventListener('click', e => {
   }
   else if (cmd === 'toggle-highlight') {
     highlight.toggle();
+    highlight.used = true;
   }
   else if (cmd === 'toggle-design-mode') {
     const active = iframe.contentDocument.designMode === 'on';
     e.target.dataset.active = active === false;
     iframe.contentDocument.designMode = active ? 'off' : 'on';
+    // iframe.contentDocument.spellcheck = active ? 'false' : 'true';
+
+    if (active === false) {
+      document.title = '[Design Mode]';
+      const s = document.createElement('script');
+      s.src = 'libs/design-mode/inject.js';
+      document.body.appendChild(s);
+    }
+    else {
+      document.title = document.oTitle;
+      [...document.querySelectorAll('.edit-toolbar')].forEach(e => {
+        const a = e.contentDocument.querySelector('[data-command="close"]');
+        a.dispatchEvent(new Event('click', {bubbles: true}));
+      });
+    }
   }
 });
+
 /* transition */
 document.getElementById('toolbar').addEventListener('transitionend', e => {
   e.target.classList.remove('active');
@@ -406,222 +627,109 @@ document.getElementById('toolbar').addEventListener('transitionend', e => {
 
 const render = () => chrome.runtime.sendMessage({
   cmd: 'read-data'
-}, obj => {
+}, async obj => {
   article = obj;
+  document.dispatchEvent(new Event('article-ready'));
+
+  document.title = document.oTitle = config.prefs.title.replace('[ORIGINAL]', article.title.replace(' :: Reader View', ''))
+    .replace('[BRAND]', 'Reader View');
+
   if (!article) { // open this page from history for instance
     return location.replace(args.get('url'));
   }
   iframe.contentDocument.open();
   const {pathname, hostname} = (new URL(article.url));
   const gcs = window.getComputedStyle(document.documentElement);
-  const html = `
-<!DOCTYPE html>
-<html${article.dir ? ' dir=' + article.dir : ''}>
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-  <style>
-  html {
-    scroll-behavior: smooth;
-  }
-  body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    margin: 30px auto 0 auto;
-    padding: 10px;
-  }
-  body[data-mode="light"] {
-    color: ${gcs.getPropertyValue('--color-mode-light-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-light-bg')};
-  }
-  body[data-mode="dark"] {
-    color: ${gcs.getPropertyValue('--color-mode-dark-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-dark-bg')};
-  }
-  body[data-mode="sepia"] {
-    color: ${gcs.getPropertyValue('--color-mode-sepia-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-sepia-bg')};
-  }
-  body[data-mode="solarized-light"] {
-    color: ${gcs.getPropertyValue('--color-mode-solarized-light-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-solarized-light-bg')};
-  }
-  body[data-mode="groove-dark"] {
-    color: ${gcs.getPropertyValue('--color-mode-groove-dark-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-groove-dark-bg')};
-  }
-  body[data-mode="solarized-dark"] {
-    color: ${gcs.getPropertyValue('--color-mode-solarized-dark-color')};
-    background-color: ${gcs.getPropertyValue('--color-mode-solarized-dark-bg')};
-  }
-  body[data-loaded=true] {
-    transition: color 0.4s, background-color 0.4s;
-  }
-  body[data-images=false] img {
-    display: none;
-  }
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-  a {
-    color: #0095dd;
-    text-decoration: none;
-  }
-  #reader-domain {
-    font-family: Helvetica, Arial, sans-serif;
-    text-decoration: none;
-    border-bottom-color: currentcolor;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
-    display: inline-block;
-    direction: ltr;
-  }
-  #reader-domain>span:first-child {
-    font-size: 1.1em;
-  }
-  #reader-domain>span:last-child {
-    font-size: 0.8em;
-    white-spance: no
-  }
-  #reader-title {
-    font-size: 1.6em;
-    line-height: 1.25em;
-    width: 100%;
-    margin: 20px 0;
-    padding: 0;
-  }
-  #reader-credits {
-    font-size: 0.9em;
-    line-height: 1.48em;
-    margin: 0 0 10px 0;
-    padding: 0;
-    font-style: italic;
-  }
-  #reader-estimated-time {
-    font-size: 0.85em;
-    line-height: 1.48em;
-    margin: 0 0 10px 0;
-    padding: 0;
-  }
-  #reader-credits:empty {
-    disply: none;
-  }
-  .tts-speaking {
-    position: relative;
-  }
-  .tts-speaking::after {
-    content: '';
-    position: absolute;
-    left: -100vw;
-    top: -5px;
-    width: 300vw;
-    height: calc(100% + 10px);
-    box-shadow: 0 0 0 1000vw rgba(128,128,128,0.2);
-  }
-  body[data-speech="false"] .tts-speaking::after {
-    display: none;
-  }
-  mark.hghlght {
-    background-color: #ffff81;
-  }
-  </style>
-</head>
-<body>
-  <span></span> <!-- for IntersectionObserver -->
-  <a id="reader-domain" href="${article.url}">
-    <span>${hostname}</span>
-    <span>${pathname}</span>
-  </a>
-  <h1 dir="auto" id="reader-title">${article.title || 'Unknown Title'}</h1>
-  <div dir="auto" id="reader-credits">${article.byline || ''}</div>
-  <div dir="auto" id="reader-estimated-time">${article.readingTimeMinsFast}-${article.readingTimeMinsSlow} minutes</div>
-  <hr/>
-  ${article.content}
-  <span></span> <!-- for IntersectionObserver -->
-  <script async src="libs/highlight/highlight.js"></script>
-</body>
-</html>`;
-  iframe.contentDocument.write(html);
+  iframe.contentDocument.write((await template())
+    .replace('%dir%', article.dir ? ' dir=' + article.dir : '')
+    .replace('%light-color%', gcs.getPropertyValue('--color-mode-light-color'))
+    .replace('%light-bg%', gcs.getPropertyValue('--color-mode-light-bg'))
+    .replace('%dark-color%', gcs.getPropertyValue('--color-mode-dark-color'))
+    .replace('%dark-bg%', gcs.getPropertyValue('--color-mode-dark-bg'))
+    .replace('%sepia-color%', gcs.getPropertyValue('--color-mode-sepia-color'))
+    .replace('%sepia-bg%', gcs.getPropertyValue('--color-mode-sepia-bg'))
+    .replace('%solarized-light-color%', gcs.getPropertyValue('--color-mode-solarized-light-color'))
+    .replace('%solarized-light-bg%', gcs.getPropertyValue('--color-mode-solarized-light-bg'))
+    .replace('%nord-light-color%', gcs.getPropertyValue('--color-mode-nord-light-color'))
+    .replace('%nord-light-bg%', gcs.getPropertyValue('--color-mode-nord-light-bg'))
+    .replace('%groove-dark-color%', gcs.getPropertyValue('--color-mode-groove-dark-color'))
+    .replace('%groove-dark-bg%', gcs.getPropertyValue('--color-mode-groove-dark-bg'))
+    .replace('%solarized-dark-color%', gcs.getPropertyValue('--color-mode-solarized-dark-color'))
+    .replace('%solarized-dark-bg%', gcs.getPropertyValue('--color-mode-solarized-dark-bg'))
+    .replace('%nord-dark-color%', gcs.getPropertyValue('--color-mode-nord-dark-color'))
+    .replace('%nord-dark-bg%', gcs.getPropertyValue('--color-mode-nord-dark-bg'))
+    .replace('%content%', article.content)
+    .replace('%title%', article.title || 'Unknown Title')
+    .replace('%byline%', article.byline || '')
+    .replace('%reading-time-fast%', article.readingTimeMinsFast)
+    .replace('%reading-time-slow%', article.readingTimeMinsSlow)
+    .replace('%published-time%', article['published_time'] || '')
+    .replace('%href%', article.url)
+    .replace('%hostname%', hostname)
+    .replace('%pathname%', pathname)
+    .replace('/*user-css*/', config.prefs['user-css'])
+    .replace('%data-images%', config.prefs['show-images'])
+    .replace('%data-font%', config.prefs.font)
+    .replace('%data-mode%', config.prefs.mode));
   iframe.contentDocument.close();
-  iframe.contentDocument.body.dataset.images = config.prefs['show-images'];
-  iframe.contentDocument.body.dataset.mode = config.prefs.mode;
 
-  document.title = article.title + ' :: Reader View';
-  // hash
-  const hash = link => {
-    const hash = link.hash.substr(1);
-    const a = iframe.contentDocument.querySelector(`[name="${hash}"],#${hash}`);
-    if (a) {
-      a.scrollIntoView({
-        block: 'start',
-        inline: 'nearest'
-      });
-      a.focus();
-    }
-    else {
-      console.warn('hash', link.hash, 'is unreachable');
-    }
-  };
-  // link handling
-  iframe.contentDocument.addEventListener('click', e => {
-    const a = e.target.closest('a');
-    if (a && a.href) {
-      // external links
-      if (a.href.startsWith('http') && e.button === 0 && e.metaKey === false) {
-        e.preventDefault();
-        return chrome.runtime.sendMessage({
-          cmd: 'open',
-          url: a.href,
-          reader: config.prefs['reader-mode'],
-          current: config.prefs['new-tab'] === false
+  // remote image loading
+  {
+    let shown = false;
+    iframe.contentWindow.addEventListener('error', e => {
+      if (shown === false && e.target.tagName === 'IMG' && e.target.src.startsWith('http')) {
+        chrome.storage.local.get({
+          'warn-on-remote-resources': true
+        }, prefs => {
+          if (prefs['warn-on-remote-resources']) {
+            tips.show(1, false);
+          }
+          shown = true;
         });
       }
-      // internal links
-      // https://github.com/rNeomy/reader-view/issues/52
-      try {
-        const link = new URL(a.href);
-        if (link.pathname === location.pathname && link.origin === location.origin) {
-          e.preventDefault();
-          if (link.hash) {
-            if (e.button === 0 && e.metaKey === false) {
-              hash(link);
-            }
-            else {
-              chrome.runtime.sendMessage({
-                cmd: 'open',
-                url: args.get('url').split('#')[0] + link.hash,
-                reader: config.prefs['reader-mode']
-              });
-            }
-          }
-        }
-      }
-      catch (e) {
-        console.warn(e);
-      }
-    }
-  });
+    }, true);
+  }
 
-  document.head.appendChild(Object.assign(
-    document.querySelector(`link[rel*='icon']`) || document.createElement('link'), {
-      type: 'image/x-icon',
-      rel: 'shortcut icon',
-      href: 'chrome://favicon/' + article.url
-    }
-  ));
-  iframe.contentDocument.getElementById('reader-domain').onclick = () => {
-    nav.back();
-    return false;
+  // fix relative links;
+  const es = [...iframe.contentDocument.querySelectorAll('[src^="//"]')];
+  for (const e of es) {
+    e.src = article.url.split(':')[0] + ':' + e.getAttribute('src');
+  }
+
+  const props = {
+    rel: 'shortcut icon',
+    href: article.icon && article.icon.startsWith('data:') ? article.icon : 'chrome://favicon/' + article.url
   };
+  if (config.prefs['show-icon'] === false) {
+    props.href = '/data/icons/32.png';
+  }
+  const link = Object.assign(document.querySelector(`link[rel*='icon']`) || document.createElement('link'), props);
+  document.head.appendChild(link);
+
   // navigation
   {
     const next = document.getElementById('navigate-next');
     const previous = document.getElementById('navigate-previous');
     previous.onclick = next.onclick = e => {
       const {clientHeight} = iframe.contentDocument.documentElement;
-      iframe.contentDocument.documentElement.scrollTop += (e.target === next ? 1 : -1) * clientHeight;
+      const lineHeight = parseInt(window.getComputedStyle(document.body).fontSize) * config.prefs.guide;
+      const guide = document.getElementById('guide');
+      guide.style.height = lineHeight + 'px';
+      if (e.target === next) {
+        iframe.contentDocument.documentElement.scrollTop += clientHeight - lineHeight;
+        guide.style.top = 0;
+        guide.style.bottom = 'unset';
+      }
+      else {
+        iframe.contentDocument.documentElement.scrollTop -= clientHeight - lineHeight;
+        guide.style.top = 'unset';
+        guide.style.bottom = 0;
+      }
+      if (config.prefs.guide) {
+        guide.classList.remove('hidden');
+      }
+      window.clearTimeout(guide.timeout);
+      guide.timeout = window.setTimeout(() => guide.classList.add('hidden'), config.prefs['guide-timeout']);
     };
     const scroll = () => {
       const {scrollHeight, clientHeight, scrollTop} = iframe.contentDocument.documentElement;
@@ -631,23 +739,38 @@ const render = () => chrome.runtime.sendMessage({
     iframe.contentWindow.addEventListener('scroll', scroll);
     scroll();
     shortcuts.push({
-      condition: e => e.shiftKey && e.key === 'ArrowRight' && (e.metaKey || e.ctrlKey),
+      id: 'next-page',
+      span: next,
       action: () => next.click()
     }, {
-      condition: e => e.shiftKey && e.key === 'ArrowLeft' && (e.metaKey || e.ctrlKey),
+      id: 'previous-page',
+      span: previous,
       action: () => previous.click()
     });
+    shortcuts.render();
+
+    // scrollbar
+    if (navigator.platform !== 'MacIntel') {
+      const html = iframe.contentDocument.documentElement;
+      const check = () => {
+        const bol = html.scrollHeight > html.clientHeight;
+        document.body.dataset.scroll = bol;
+      };
+      const resizeObserver = new ResizeObserver(check);
+      resizeObserver.observe(html);
+    }
   }
 
   iframe.contentDocument.documentElement.appendChild(styles.internals);
-  iframe.contentDocument.documentElement.appendChild(styles.iframe);
   iframe.addEventListener('load', () => {
-    // apply transition after initial changes
-    document.body.dataset.loaded = iframe.contentDocument.body.dataset.loaded = true;
+    if (document.body.dataset.loaded !== 'true') {
+      // apply transition after initial changes
+      document.body.dataset.loaded = iframe.contentDocument.body.dataset.loaded = true;
 
-    highlight = new iframe.contentWindow.Highlight();
-    if (article.highlights) {
-      highlight.import(article.highlights);
+      highlight = new iframe.contentWindow.Highlight();
+      if (article.highlights) {
+        highlight.import(article.highlights);
+      }
     }
   });
   // highlight
@@ -667,20 +790,52 @@ const render = () => chrome.runtime.sendMessage({
       ) {
         nav.back();
       }
+
       shortcuts.forEach(o => {
-        if (o.condition(e)) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          o.action();
-          return false;
+        const s = config.prefs.shortcuts[o.id];
+        if (s.indexOf(e.code) === -1) {
+          return;
         }
+        if (s.indexOf('Ctrl/Command') !== -1 && (e.ctrlKey || e.metaKey) === false) {
+          return;
+        }
+        if (s.indexOf('Ctrl/Command') === -1 && (e.ctrlKey || e.metaKey)) {
+          return;
+        }
+        if (s.indexOf('Shift') !== -1 && e.shiftKey === false) {
+          return;
+        }
+        if (s.indexOf('Shift') === -1 && e.shiftKey) {
+          return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        o.action();
+        return false;
       });
     };
+    // editor commands issue in FF
+    iframe.contentWindow.addEventListener('keydown', e => {
+      if (iframe.contentDocument.designMode === 'on') {
+        const meta = e.metaKey || e.ctrlKey;
+        if (meta && e.code === 'KeyB') {
+          iframe.contentDocument.execCommand('bold');
+          e.preventDefault();
+        }
+        else if (meta && e.code === 'KeyI') {
+          iframe.contentDocument.execCommand('italic');
+          e.preventDefault();
+        }
+        else if (meta && e.code === 'KeyU') {
+          iframe.contentDocument.execCommand('underline');
+          e.preventDefault();
+        }
+      }
+    });
     iframe.contentWindow.addEventListener('keydown', callback);
     window.addEventListener('keydown', callback);
     iframe.contentWindow.focus();
   }
-  iframe.contentDocument.body.dataset.font = config.prefs.font;
   // move to hash
   if (args.get('url').indexOf('#') !== -1) {
     const link = new URL(args.get('url'));
@@ -693,9 +848,6 @@ config.onChanged.push(ps => {
   if (ps['top-css']) {
     styles.top.textContent = config.prefs['top-css'];
   }
-  if (ps['user-css']) {
-    styles.iframe.textContent = config.prefs['user-css'];
-  }
   if (ps['font-size'] || ps['font'] || ps['line-height'] || ps['width']) {
     update.async();
   }
@@ -703,15 +855,22 @@ config.onChanged.push(ps => {
     update.images();
   }
   if (ps['mode']) {
-    document.body.dataset.mode = iframe.contentDocument.body.dataset.mode = config.prefs.mode;
+    document.body.dataset.mode = config.prefs.mode;
+  }
+  if (ps['toggle-toolbar']) {
+    document.body.dataset.toolbar = config.prefs['toggle-toolbar'];
   }
 });
 
 // load
 config.load(() => {
   document.body.dataset.mode = config.prefs.mode;
+  document.body.dataset.toolbar = config.prefs['toggle-toolbar'];
   if (config.prefs['printing-button']) {
     document.getElementById('printing-button').classList.remove('hidden');
+  }
+  if (config.prefs['mail-button']) {
+    document.getElementById('mail-button').classList.remove('hidden');
   }
   if (config.prefs['save-button']) {
     document.getElementById('save-button').classList.remove('hidden');
@@ -736,7 +895,6 @@ config.load(() => {
 
   styles.top.textContent = config.prefs['top-css'];
   document.documentElement.appendChild(styles.top);
-  styles.iframe.textContent = config.prefs['user-css'];
 
   if (config.prefs['navigate-buttons']) {
     document.getElementById('navigate').classList.remove('hidden');
@@ -744,3 +902,13 @@ config.load(() => {
 
   render();
 });
+
+// convert data HREFs
+const links = window.links = (d = document) => {
+  for (const a of [...d.querySelectorAll('[data-href]')]) {
+    if (a.hasAttribute('href') === false) {
+      a.href = chrome.runtime.getManifest().homepage_url + '#' + a.dataset.href;
+    }
+  }
+};
+document.addEventListener('DOMContentLoaded', () => links());

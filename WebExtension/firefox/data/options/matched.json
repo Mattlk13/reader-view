@@ -2,23 +2,8 @@
   "country-flags": {
     "name": "Country Flags & IP WHOIS"
   },
-  "useragent-switcher": {
-    "name": "User Agent Switcher"
-  },
-  "work-offline": {
-    "name": "Work Offline"
-  },
-  "local-cdn": {
-    "name": "Local CDN"
-  },
-  "media-converter": {
-    "name": "Tor Control (Anonymity Layer)"
-  },
   "save-images": {
     "name": "Download All Images"
-  },
-  "privacy-settings": {
-    "name": "Privacy Settings"
   },
   "media-player": {
     "name": "YouTube Media Player"
@@ -28,5 +13,53 @@
   },
   "send-to": {
     "name": "Send to VLC"
+  },
+  "useragent-switcher": {
+    "name": "User-Agent Switcher and Manager"
+  },
+  "block-site": {
+    "name": "Block Site"
+  },
+  "convert-to": {
+    "name": "Convert to PDF"
+  },
+  "dark-theme": {
+    "name": "Dark Theme"
+  },
+  "mute-tab": {
+    "name": "Mute Tab"
+  },
+  "proxy-switcher": {
+    "name": "Proxy Switcher"
+  },
+  "font-finder": {
+    "name": "Font Finder"
+  },
+  "gmail-notifier": {
+    "name": "Gmail Notifier"
+  },
+  "popup-blocker": {
+    "name": "Popup Blocker"
+  },
+  "audio-equalizer": {
+    "name": "Audio Equalizer"
+  },
+  "epub-viewer": {
+    "name": "ePub Viewer"
+  },
+  "sqlite-viewer": {
+    "name": "SQLite Viewer"
+  },
+  "audio-joiner": {
+    "name": "Audio Joiner"
+  },
+  "send-links": {
+    "name": "Send Links"
+  },
+  "search-all-tabs": {
+    "name": "Search all Tabs"
+  },
+  "bookmarks-commander": {
+    "name": "Bookmarks Commander"
   }
 }

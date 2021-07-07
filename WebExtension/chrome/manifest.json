@@ -1,9 +1,8 @@
 {
   "name": "Reader View",
-  "short_name": "reader-view",
-  "description": "strips away clutter like buttons, background images, and changes the page's text size, contrast and layout for better readability",
-  "author": "Richard Neomy",
-  "version": "0.3.5",
+  "description": "__MSG_description__",
+  "default_locale": "en",
+  "version": "0.5.0",
   "manifest_version": 2,
   "permissions": [
     "storage",
@@ -11,28 +10,23 @@
     "contextMenus",
     "notifications",
     "declarativeContent",
-    "chrome://favicon/"
+    "chrome://favicon/",
+    "https://text-to-speech-demo.ng.bluemix.net/api/*"
   ],
   "optional_permissions": [
-    "tabs",
     "*://*/*",
-    "tts",
-    "ttsEngine"
+    "webNavigation",
+    "https://translate.google.com/"
   ],
   "background": {
-    "persist": false,
+    "persistent": false,
     "scripts": [
       "config.js",
       "common.js"
     ]
   },
   "page_action": {
-    "default_icon": {
-      "16": "data/icons/16.png",
-      "32": "data/icons/32.png",
-      "48": "data/icons/48.png",
-      "64": "data/icons/64.png"
-    }
+    "browser_style": true
   },
   "homepage_url": "https://add0n.com/chrome-reader-view.html",
   "icons": {
@@ -41,16 +35,21 @@
     "48": "data/icons/48.png",
     "64": "data/icons/64.png",
     "128": "data/icons/128.png",
-    "256": "data/icons/256.png"
+    "256": "data/icons/256.png",
+    "512": "data/icons/512.png"
   },
   "options_ui": {
     "page": "data/options/index.html",
-    "chrome_style": true
+    "chrome_style": true,
+    "open_in_tab": true
   },
   "incognito": "split",
   "commands": {
     "toggle-reader-view": {
       "description": "Toggle the Reader View"
     }
-  }
+  },
+  "web_accessible_resources": [
+    "/data/reader/template.html"
+  ]
 }

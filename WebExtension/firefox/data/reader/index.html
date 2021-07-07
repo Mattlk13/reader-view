@@ -1,25 +1,36 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <title>Loading... :: Reader View</title>
     <link rel="stylesheet" href="fontello.css">
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="libs/text-to-speech/tts.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body data-speech=false>
-    <div id="toolbar">
+    <div id="toolbar" title="Hide/Show Toolbar (command)">
       <span class="icon-close" data-cmd="close" title="Close Reader View"></span>
       <span class="icon-font" data-cmd="open-font-utils" title="Type controls"></span>
       <div id="font-utils" tabindex="-1" class="hidden">
+        <p data-id="help">For more customization options check <a data-href="faq5" target="_blank">here</a></p>
         <table border="0" cellpadding="0" cellspacing="0">
           <colgroup>
-            <col style="border-right: solid 1px #B5B5B5;" width=50%>
+            <col style="border-right: solid 1px var(--border-color)" width=50%>
             <col>
           </colgroup>
           <tr>
             <td data-cmd="font-type-sans-serif"><span>Aa</span><span>Sans-serif</span></td>
             <td data-cmd="font-type-serif"><span>Aa</span><span>Serif</span></td>
+          </tr>
+          <tr id="font-details">
+            <td colspan="2">
+              <div id="">
+                <span>Font: <span data-id="font-size"></span></span>
+                <span>Width: <span data-id="screen-width"></span></span>
+                <span>Height: <span data-id="line-height"></span></span>
+              </div>
+            </td>
           </tr>
           <tr>
             <td data-cmd="font-decrease"><span class="icon-minus"></span></td>
@@ -53,11 +64,13 @@
             <td colspan="2" data-id="color">
               <div>
                 <span data-cmd="color-mode-light">Light</span>
+                <span data-cmd="color-mode-nord-light">Nord</span>
                 <span data-cmd="color-mode-sepia">Sepia</span>
                 <span data-cmd="color-mode-solarized-light">Solarized</span>
               </div>
               <div>
                 <span data-cmd="color-mode-dark">Dark</span>
+                <span data-cmd="color-mode-nord-dark">Nord</span>
                 <span data-cmd="color-mode-groove-dark">Groove</span>
                 <span data-cmd="color-mode-solarized-dark">Solarized</span>
               </div>
@@ -68,7 +81,7 @@
       <div id="image-utils" tabindex="-1" class="hidden">
         <table border="0" cellpadding="0" cellspacing="0">
           <colgroup>
-            <col style="border-right: solid 1px #B5B5B5;" width=50%>
+            <col style="border-right: solid 1px var(--border-color)" width=50%>
             <col>
           </colgroup>
           <tr title="The +/- buttons only scale images with width greater than 32px. Scaling is not persistent operation. To reset, refresh the page.">
@@ -84,22 +97,28 @@
     </div>
     <div id="content">
       <div id="tips">
-        <div>
-          <input type="button" value="×">
-          <span></span>
-        </div>
+        <template>
+          <div>
+            <input type="button" value="×">
+            <span></span>
+          </div>
+        </template>
       </div>
       <iframe></iframe>
     </div>
     <div id="speech">
+      <a data-href="faq7" target=_blank>shortcuts</a>
       <span data-cmd="close-speech">×</span>
+      <span data-cmd="minimize-speech">-</span>
+      <span data-id="msg-speech"></span>
     </div>
     <div id="navigate" class="hidden">
-      <input type="button" id="navigate-previous" value="&#xE80D;" disabled=true title="move to the previous page (Meta + Shift + Left Arrow Key)">
-      <input type="button" id="navigate-next" value="&#xE80A;" disabled=true title="move to the next page (Meta + Shift + Right Arrow Key)">
+      <input type="button" id="navigate-previous" value="&#xE80D;" disabled=true title="move to the previous page (command)">
+      <input type="button" id="navigate-next" value="&#xE80A;" disabled=true title="move to the next page (command)">
+      <div id="guide" class="hidden"></div>
     </div>
     <script src="/config.js"></script>
     <script src="index.js"></script>
-    <script async src="tip.js"></script>
+    <script async src="plugins.js"></script>
   </body>
 </html>
